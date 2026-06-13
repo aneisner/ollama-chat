@@ -3,15 +3,12 @@
 <head>
     <title>Ollama Cockpit Chat</title>
     <meta charset="utf-8">
-    <!-- Richtiger relativer Pfad zur Cockpit-Zentrale -->
     <script src="../base1/cockpit.js"></script>
-    <!-- Externe Design-Datei -->
     <link href="index.css" rel="stylesheet">
 </head>
 <body>
 <div class="container">
     
-    <!-- Hier ist die von dir gezeigte Header-Zone mit dem neuen Button -->
     <div class="header-zone">
         <h2>Ollama Chat</h2>
         <div style="display: flex; gap: 10px;">
@@ -21,16 +18,22 @@
     </div>
 
     <div id="chat-box">
-        <div class="msg ai-msg">Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen?</div>
+        <div class="msg ai-msg">
+            Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen?
+            <br><br>
+            <small style="color: #6a6e73;">
+                💡 <b>Tipp:</b> Tippe ein <b><code>/</code></b> direkt gefolgt von einem Linux-Befehl 
+                (z. B. <code>/podman ps</code> oder <code>/df -h</code>), um ihn direkt auf dem Server auszuführen.
+            </small>
+        </div>
     </div>
     
     <div class="input-group">
-        <input type="text" id="user-input" placeholder="Frag deine KI etwas... (Senden mit Enter)">
+        <input type="text" id="user-input" placeholder="Frag deine KI oder tippe /befehl... (Senden mit Enter)">
         <button id="send-btn">Senden</button>
     </div>
 </div>
 
-<!-- Externe JavaScript-Datei am Ende laden -->
 <script src="index.js"></script>
 </body>
 </html>
