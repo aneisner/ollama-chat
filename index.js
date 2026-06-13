@@ -128,7 +128,6 @@ function fetchAiResponse() {
 
     const selectedModel = modelSelect.value;
     
-    // HIER WURDE DER MÄRCHEN-KILLER EINGEBAUT: options -> temperature: 0.0
     const request = ollama.request({
         method: "POST",
         path: "/api/chat",
@@ -137,9 +136,7 @@ function fetchAiResponse() {
             model: selectedModel, 
             messages: ollamaPayload, 
             stream: true,
-            options: {
-                temperature: 0.0 // Verhindert kreatives Erfinden komplett!
-            }
+            options: { temperature: 0.0 }
         })
     });
 
@@ -192,7 +189,31 @@ function fetchAiResponse() {
                 
                 executeSystemCommand(detectedCommand, function() {
                     confirmBtn.innerText = "✅ Befehl ausgeführt";
-                    fetchAiResponse();
+                    
+                    // ==========================================
+                    // AB HIER NEU: OPTIONALE KI-INTERPRETATION
+                    // ==========================================
+                    const analysisBtnId = "analysis-btn-" + Date.now();
+                    const analysisHtml = `
+                        <div class="msg ai-msg cmd-proposal-box" style="border-left: 5px solid #0066cc !important; background: #f0f6ff !important;">
+                            💡 <b>Ergebnis empfangen.</b> Möchtest du, dass ich die Daten für dich interpretiere?
+                            <br><br>
+                            <button id="${analysisBtnId}" class="exec-confirm-btn" style="background: #0066cc; color: white; border-color: #0056b3;">📊 Ergebnis interpretieren</button>
+                        </div>`;
+                    
+                    chatBox.insertAdjacentHTML('beforeend', analysisHtml);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                    
+                    // Schaltet die Eingabe SOFORT wieder frei, falls du die Interpretation überspringen willst!
+                    sendBtn.disabled = false;
+                    userInput.disabled = false;
+                    userInput.focus();
+                    
+                    document.getElementById(analysisBtnId).addEventListener("click", function() {
+                        this.disabled = true;
+                        this.innerText = "⏳ Analysiere...";
+                        fetchAiResponse(); // Erst jetzt wird die KI zur Auswertung gerufen
+                    });
                 });
             });
         } else {
