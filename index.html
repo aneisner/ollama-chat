@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ollama Cockpit Chat</title>
+    <meta charset="utf-8">
+    <script src="../base1/cockpit.js"></script>
+    <link href="index.css" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+    <div class="header-zone">
+        <h2>Ollama Chat</h2>
+        <select id="model-select"><option value="">Lade Modelle...</option></select>
+    </div>
+    <div id="chat-box">
+        <div class="msg ai-msg">Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen?</div>
+    </div>
+    <div class="input-group">
+        <input type="text" id="user-input" placeholder="Frag deine KI etwas... (Senden mit Enter)">
+        <button id="send-btn">Senden</button>
+    </div>
+</div>
+<script src="index.js"></script>
+</body>
+</html>

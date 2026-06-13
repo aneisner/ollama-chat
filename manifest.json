@@ -1,0 +1,10 @@
+{
+    "version": "0.1",
+    "tools": {
+        "ollama-chat": {
+            "label": "Ollama Chat",
+            "path": "index.html",
+            "icon": "comment"
+        }
+    }
+}
