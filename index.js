@@ -38,38 +38,34 @@ function sendMessage() {
 
     // FALL A: Es ist ein Linux-Befehl (beginnt mit /)
     if (text.startsWith('/')) {
-        const command = text.substring(1).trim(); // Das "/" abschneiden
+        const command = text.substring(1).trim();
         if (!command) return;
 
-        // User-Eingabe im Chat anzeigen
-        chatBox.innerHTML += `<div class="msg user-msg" style="background: #23272a;">💻 Befehl: ${command}</div>`;
+        chatBox.innerHTML += `<div class="msg user-msg cmd-user-msg">💻 Befehl: ${command}</div>`;
         userInput.value = "";
         chatBox.scrollTop = chatBox.scrollHeight;
 
-        // UI sperren während der Ausführung
         sendBtn.disabled = true;
         userInput.disabled = true;
 
-        // Terminal-Box für die Ausgabe vorbereiten
         const cmdId = "cmd-" + Date.now();
-        chatBox.innerHTML += `<div class="msg ai-msg" id="${cmdId}" style="font-family: monospace; white-space: pre-wrap; background: #1c1d22; color: #39d353; border-color: #30363d; width: 90%; max-width: 100%;"><i>Führe Befehl aus...</i></div>`;
+        chatBox.innerHTML += `<div class="msg ai-msg cmd-ai-msg" id="${cmdId}"><i>Führe Befehl aus...</i></div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
 
-        // Befehl nativ auf dem Server ausführen via Cockpit-Bridge
         cockpit.spawn(["bash", "-c", command])
             .done(output => {
                 document.getElementById(cmdId).innerText = output || "[Befehl erfolgreich ausgeführt (Keine Rückgabe)]";
                 uiAusgeben();
             })
             .fail(error => {
-                document.getElementById(cmdId).innerHTML = `<span style='color:#ff6b6b;'><b>Fehler (Code ${error.exit_code || error.status}):</b>\n${error.message || 'Befehl fehlgeschlagen'}</span>`;
+                document.getElementById(cmdId).innerHTML = `<span class="text-danger"><b>Fehler (Code ${error.exit_code || error.status}):</b>\n${error.message || 'Befehl fehlgeschlagen'}</span>`;
                 uiAusgeben();
             });
 
-        return; // Beendet die Funktion hier, damit es nicht an Ollama gesendet wird
+        return;
     }
 
-    // FALL B: Normale KI-Anfrage (kein / am Anfang)
+    // FALL B: Normale KI-Anfrage mit Live-Streaming
     if (!selectedModel) return;
 
     chatBox.innerHTML += `<div class="msg user-msg">${text}</div>`;
@@ -78,26 +74,71 @@ function sendMessage() {
 
     sendBtn.disabled = true;
     userInput.disabled = true;
+
     const aiMessageDivId = "ai-" + Date.now();
     chatBox.innerHTML += `<div class="msg ai-msg" id="${aiMessageDivId}"><i>Überlege...</i></div>`;
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    ollama.post("/api/generate", JSON.stringify({ model: selectedModel, prompt: text, stream: false }))
-        .then(response => {
-            const data = JSON.parse(response);
-            document.getElementById(aiMessageDivId).innerText = data.response;
-        })
-        .catch(err => { 
-            console.error("Chat Fehler:", err);
-            document.getElementById(aiMessageDivId).innerHTML = "<span style='color:red;'>Fehler beim Abruf.</span>"; 
-        })
-        .then(() => {
-            uiAusgeben();
+    const aiMessageDiv = document.getElementById(aiMessageDivId);
+    let isFirstChunk = true;
+    let buffer = "";
+
+    const request = ollama.request({
+        method: "POST",
+        path: "/api/generate",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selectedModel, prompt: text, stream: true })
+    });
+
+    request.stream(function(data) {
+        buffer += data;
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        lines.forEach(line => {
+            if (line.trim() === "") return;
+            try {
+                const parsed = JSON.parse(line);
+                if (parsed.response) {
+                    if (isFirstChunk) {
+                        aiMessageDiv.innerText = "";
+                        isFirstChunk = false;
+                    }
+                    aiMessageDiv.innerText += parsed.response;
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (e) {
+                console.error("Fehler beim Live-Parsen einer Zeile:", e);
+            }
         });
+    });
+
+    request.done(function() {
+        if (buffer.trim() !== "") {
+            try {
+                const parsed = JSON.parse(buffer);
+                if (parsed.response) {
+                    if (isFirstChunk) aiMessageDiv.innerText = "";
+                    aiMessageDiv.innerText += parsed.response;
+                }
+            } catch(e){}
+        }
+        uiAusgeben();
+    });
+
+    request.fail(function(err) {
+        console.error("Streaming Chat Fehler:", err);
+        if (isFirstChunk) {
+            aiMessageDiv.innerHTML = "<span class='text-danger'>Fehler beim Abruf. (Verbindung abgebrochen)</span>";
+        } else {
+            aiMessageDiv.innerHTML += "<br><span class='text-danger'>[Stream abgebrochen]</span>";
+        }
+        uiAusgeben();
+    });
 }
 
 function resetChat() {
-    chatBox.innerHTML = `<div class="msg ai-msg">Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen? <br><br><small><i>Tipp: Tippe <b>/befehl</b> (z.B. <code>/uname -a</code>), um Linux-Befehle direkt auszuführen.</i></small></div>`;
+    chatBox.innerHTML = `<div class="msg ai-msg">Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen? <br><br><small class="text-muted"><i>Tipp: Tippe <b>/befehl</b> (z.B. <code>/uname -a</code>), um Linux-Befehle direkt auszuführen.</i></small></div>`;
     userInput.value = "";
     sendBtn.disabled = false;
     userInput.disabled = false;

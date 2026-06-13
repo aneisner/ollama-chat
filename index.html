@@ -3,7 +3,9 @@
 <head>
     <title>Ollama Cockpit Chat</title>
     <meta charset="utf-8">
+    <!-- Richtiger relativer Pfad zur Cockpit-Zentrale -->
     <script src="../base1/cockpit.js"></script>
+    <!-- Externe Design-Datei -->
     <link href="index.css" rel="stylesheet">
 </head>
 <body>
@@ -11,7 +13,8 @@
     
     <div class="header-zone">
         <h2>Ollama Chat</h2>
-        <div style="display: flex; gap: 10px;">
+        <!-- Klasse statt Inline-Style -->
+        <div class="header-controls">
             <button id="new-chat-btn">Neuer Chat</button>
             <select id="model-select"><option value="">Lade Modelle...</option></select>
         </div>
@@ -21,7 +24,8 @@
         <div class="msg ai-msg">
             Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen?
             <br><br>
-            <small style="color: #6a6e73;">
+            <!-- Klasse statt Inline-Style -->
+            <small class="text-muted">
                 💡 <b>Tipp:</b> Tippe ein <b><code>/</code></b> direkt gefolgt von einem Linux-Befehl 
                 (z. B. <code>/podman ps</code> oder <code>/df -h</code>), um ihn direkt auf dem Server auszuführen.
             </small>
@@ -34,6 +38,7 @@
     </div>
 </div>
 
+<!-- Externe JavaScript-Datei am Ende laden -->
 <script src="index.js"></script>
 </body>
 </html>
