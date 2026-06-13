@@ -20,5 +20,5 @@ Ein leichtgewichtiges, eigenständiges Cockpit-Modul, um direkt in der Webkonsol
    Cockpit benötigt zwingend globale Leserechte für die Modul-Dateien, um sie im Browser korrekt auszuliefern. Da die Dateien beim Kopieren oft dem Benutzer root zugeordnet werden, muss dieser Befehl zwingend ausgeführt werden:
 ```bash
    sudo chmod -R 755 /usr/share/cockpit/ollama-chat
-Achtung: Ohne diesen Schritt bleibt das Modul entweder im Cockpit-Menü unsichtbar oder lädt ohne Design (was zu einem Absturz des JavaScripts und zu einem MIME-Type-Fehler 'text/html' statt 'text/css' in der Browser-Konsole führt).
+   Achtung: Ohne diesen Schritt bleibt das Modul entweder im Cockpit-Menü unsichtbar oder lädt ohne Design (was zu einem Absturz des JavaScripts und zu einem MIME-Type-Fehler 'text/html' statt 'text/css' in der Browser-Konsole führt).
 
