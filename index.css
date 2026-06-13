@@ -190,13 +190,11 @@ body {
 .text-danger { color: #ff6b6b !important; }
 .text-muted { color: #6a6e73 !important; font-size: 13px; display: block; }
 
-/* ========================================== */
-/* UPDATED: SICHERHEITSBOX IN EDLEM HELLGRAU  */
-/* ========================================== */
+/* SICHERHEITSBOX */
 .cmd-proposal-box {
-    background: #f1f2f4 !important; /* Helles Hellgrau (PatternFly/Cockpit Style) */
+    background: #f1f2f4 !important;
     border: 1px solid #d2d2d2 !important;
-    border-left: 5px solid #72767b !important; /* Dezent dunklerer grauer Akzentbalken */
+    border-left: 5px solid #72767b !important;
     color: #151515 !important;
     width: 90%;
     align-self: flex-start !important;
@@ -209,7 +207,7 @@ body {
     border-radius: 3px;
     font-family: monospace;
     font-size: 14px;
-    color: #0066cc; /* Befehlstext in Cockpit-Blau */
+    color: #0066cc;
     display: inline-block;
     margin-top: 5px;
 }
@@ -217,7 +215,7 @@ body {
 .exec-confirm-btn {
     margin-top: 10px;
     padding: 6px 14px;
-    background: #e4e6e8; /* Passender hellgrauer Button */
+    background: #e4e6e8;
     color: #151515;
     border: 1px solid #8a8d90;
     border-radius: 3px;
@@ -227,6 +225,18 @@ body {
     transition: background 0.1s;
 }
 
-.exec-confirm-btn:hover {
-    background: #d2d2d2;
+.exec-confirm-btn:hover { background: #d2d2d2; }
+
+/* ========================================== */
+/* UPDATED: DER NEUE ASYNCHRONIE-STOP-BUTTON  */
+/* ========================================== */
+#stop-btn {
+    padding: 6px 16px;
+    background: #c9190b; /* Alarmsignal Rot (PatternFly/Cockpit Style) */
+    color: white;
+    border: 1px solid #a30000;
+    border-radius: 3px;
+    font-weight: 600;
+    cursor: pointer;
 }
+#stop-btn:hover { background: #a30000; }

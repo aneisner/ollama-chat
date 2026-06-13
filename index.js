@@ -3,6 +3,7 @@ const modelSelect = document.getElementById("model-select");
 const chatBox = document.getElementById("chat-box");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const stopBtn = document.getElementById("stop-btn"); // Neu
 const newChatBtn = document.getElementById("new-chat-btn");
 const historyList = document.getElementById("history-list");
 
@@ -16,6 +17,8 @@ try {
 
 let currentChatId = null;
 let currentMessages = [];
+let currentActiveProcess = null;  // Hält den aktiven Stream oder System-Prozess
+let wasIntentionalStop = false;  // Verhindert hässliche rote Error-Blöcke bei manuellem Abbruch
 
 const SYSTEM_PROMPT = {
     role: 'system',
@@ -27,6 +30,21 @@ const SYSTEM_PROMPT = {
     2. Wenn du das echte Ergebnis als System-Nachricht erhältst, analysierst du stur NUR diese Daten und erklärst Toni sachlich, was dort steht.`
 };
 
+// Hilfsfunktion: Steuert das nahtlose Swappen von Senden- und Stop-Button
+function toggleControls(isActive) {
+    if (isActive) {
+        sendBtn.style.display = "none";
+        stopBtn.style.display = "block";
+        userInput.disabled = true;
+    } else {
+        sendBtn.style.display = "block";
+        stopBtn.style.display = "none";
+        userInput.disabled = false;
+        userInput.focus();
+    }
+}
+
+// Modelle beim Start abrufen
 ollama.get("/api/tags")
     .then(data => {
         const response = JSON.parse(data);
@@ -98,14 +116,12 @@ function resetChat() {
             <small class="text-muted">Probiere mal: <i>"Zeig mir den Inhalt von /home/toni/development/ollama-chat/"</i></small>
         </div>`;
     userInput.value = "";
-    sendBtn.disabled = false;
-    userInput.disabled = false;
-    userInput.focus();
+    toggleControls(false);
 }
 
 function fetchAiResponse() {
-    sendBtn.disabled = true;
-    userInput.disabled = true;
+    toggleControls(true);
+    wasIntentionalStop = false;
 
     const aiMessageDivId = "ai-" + Date.now();
     chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg" id="${aiMessageDivId}"><i>Überlege...</i></div>`);
@@ -140,6 +156,8 @@ function fetchAiResponse() {
         })
     });
 
+    currentActiveProcess = request; // Für den Abbruch-Handle registrieren
+
     request.stream(function(data) {
         buffer += data;
         const lines = buffer.split("\n");
@@ -159,6 +177,7 @@ function fetchAiResponse() {
     });
 
     request.done(function() {
+        currentActiveProcess = null;
         let finalAiText = aiMessageDiv.innerText;
         currentMessages.push({ role: 'assistant', content: finalAiText });
         
@@ -182,6 +201,9 @@ function fetchAiResponse() {
             chatBox.insertAdjacentHTML('beforeend', proposalHtml);
             chatBox.scrollTop = chatBox.scrollHeight;
 
+            // Da ein EXEC-Befehl auf Freigabe wartet, geben wir die Buttons wieder frei
+            toggleControls(false);
+
             const confirmBtn = document.getElementById(btnId);
             confirmBtn.addEventListener("click", function() {
                 confirmBtn.disabled = true;
@@ -190,9 +212,6 @@ function fetchAiResponse() {
                 executeSystemCommand(detectedCommand, function() {
                     confirmBtn.innerText = "✅ Befehl ausgeführt";
                     
-                    // ==========================================
-                    // AB HIER NEU: OPTIONALE KI-INTERPRETATION
-                    // ==========================================
                     const analysisBtnId = "analysis-btn-" + Date.now();
                     const analysisHtml = `
                         <div class="msg ai-msg cmd-proposal-box" style="border-left: 5px solid #0066cc !important; background: #f0f6ff !important;">
@@ -204,31 +223,26 @@ function fetchAiResponse() {
                     chatBox.insertAdjacentHTML('beforeend', analysisHtml);
                     chatBox.scrollTop = chatBox.scrollHeight;
                     
-                    // Schaltet die Eingabe SOFORT wieder frei, falls du die Interpretation überspringen willst!
-                    sendBtn.disabled = false;
-                    userInput.disabled = false;
-                    userInput.focus();
+                    toggleControls(false);
                     
                     document.getElementById(analysisBtnId).addEventListener("click", function() {
                         this.disabled = true;
                         this.innerText = "⏳ Analysiere...";
-                        fetchAiResponse(); // Erst jetzt wird die KI zur Auswertung gerufen
+                        fetchAiResponse();
                     });
                 });
             });
         } else {
-            sendBtn.disabled = false;
-            userInput.disabled = false;
-            userInput.focus();
+            toggleControls(false);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
     });
 
     request.fail(function(err) {
+        currentActiveProcess = null;
+        if (wasIntentionalStop) return; // Unterdrückt Fehlermeldung bei manuellem Stop
         aiMessageDiv.innerHTML += "<br><span class='text-danger'>[Fehler beim Abruf]</span>";
-        sendBtn.disabled = false;
-        userInput.disabled = false;
-        userInput.focus();
+        toggleControls(false);
     });
 }
 
@@ -243,13 +257,10 @@ function sendMessage() {
         chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
         userInput.value = "";
         
-        sendBtn.disabled = true;
-        userInput.disabled = true;
+        toggleControls(true);
         
         executeSystemCommand(command, function() {
-            sendBtn.disabled = false;
-            userInput.disabled = false;
-            userInput.focus();
+            toggleControls(false);
             chatBox.scrollTop = chatBox.scrollHeight;
         });
         return;
@@ -266,28 +277,56 @@ function sendMessage() {
 }
 
 function executeSystemCommand(command, callback) {
+    toggleControls(true);
+    wasIntentionalStop = false;
+
     const cmdId = "cmd-" + Date.now();
     chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg cmd-ai-msg" id="${cmdId}"><i>Führe Befehl aus...</i></div>`);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     currentMessages.push({ role: 'command-user', content: command });
 
-    cockpit.spawn(["bash", "-c", command], { superuser: "require" })
-        .done(output => {
-            const resText = output || "[Befehl erfolgreich ohne Rückgabe ausgeführt]";
-            document.getElementById(cmdId).innerText = resText;
-            currentMessages.push({ role: 'command-assistant', content: resText });
-            saveToLocalStorage();
-            callback();
-        })
-        .fail(error => {
-            const errText = `Fehler (Code ${error.exit_code || error.status}):\n${error.message || 'Befehl fehlgeschlagen'}`;
-            document.getElementById(cmdId).innerHTML = `<span class="text-danger">${errText}</span>`;
-            currentMessages.push({ role: 'command-assistant', content: errText });
-            saveToLocalStorage();
-            callback();
-        });
+    const proc = cockpit.spawn(["bash", "-c", command], { superuser: "require" });
+    currentActiveProcess = proc; // Für den Abbruch-Handle registrieren
+
+    proc.done(output => {
+        currentActiveProcess = null;
+        const resText = output || "[Befehl erfolgreich ohne Rückgabe ausgeführt]";
+        document.getElementById(cmdId).innerText = resText;
+        currentMessages.push({ role: 'command-assistant', content: resText });
+        saveToLocalStorage();
+        callback();
+    })
+    proc.fail(error => {
+        currentActiveProcess = null;
+        if (wasIntentionalStop) return; // Unterdrückt Fehlermeldung bei manuellem Stop
+        const errText = `Fehler (Code ${error.exit_code || error.status}):\n${error.message || 'Befehl fehlgeschlagen'}`;
+        document.getElementById(cmdId).innerHTML = `<span class="text-danger">${errText}</span>`;
+        currentMessages.push({ role: 'command-assistant', content: errText });
+        saveToLocalStorage();
+        callback();
+    });
 }
+
+// DER AKTION-TRIGGER FÜR DEN STOP-BUTTON
+stopBtn.addEventListener("click", function() {
+    if (currentActiveProcess) {
+        wasIntentionalStop = true;
+        currentActiveProcess.close(); // Killt den HTTP-Stream oder den Linux-Bash-Prozess augenblicklich!
+        currentActiveProcess = null;
+    }
+    
+    // Sucht das letzte wartende Element im Chat und markiert es als abgebrochen
+    const activeThinking = chatBox.querySelector('.ai-msg:last-child');
+    if (activeThinking && (activeThinking.innerText.includes("Überlege...") || activeThinking.innerText.includes("Führe Befehl aus..."))) {
+        activeThinking.innerHTML = `<span class="text-danger">🛑 Vorgang vom Benutzer abgebrochen.</span>`;
+    } else {
+        chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg text-danger">🛑 Vorgang vom Benutzer abgebrochen.</div>`);
+    }
+    
+    chatBox.scrollTop = chatBox.scrollHeight;
+    toggleControls(false); // Macht die Eingabe und den Senden-Button sofort wieder bereit!
+});
 
 function updateChatInList(firstText) {
     if (!firstText) firstText = "Neuer Chat";
