@@ -1,12 +1,48 @@
-/* Falls du deine alten Basis-Styles (Container, Eingabefeld) behalten willst, */
-/* lass sie einfach ganz oben stehen und füge das hier unten an: */
+/* Globale Anpassung an das Cockpit-Design */
+body {
+    font-family: "RedHatDisplay", "RedHatText", "Helvetica Neue", Arial, sans-serif;
+    background-color: #f8f9fa;
+    margin: 0;
+    padding: 20px;
+    color: #151515;
+}
+
+/* Der Hauptcontainer des Chats */
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid #d2d2d2;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 40px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Header-Bereich */
+.header-zone {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #d2d2d2;
+    background: #fafafa;
+}
+
+.header-zone h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
 
 .header-controls {
     display: flex;
     gap: 10px;
 }
 
-#new-chat-btn {
+/* Buttons & Dropdown (Cockpit Style) */
+#new-chat-btn, #send-btn {
     padding: 6px 12px;
     background: #f0f0f0;
     color: #151515;
@@ -15,6 +51,7 @@
     font-weight: 500;
     font-size: 14px;
     cursor: pointer;
+    transition: background 0.1s;
 }
 
 #new-chat-btn:hover {
@@ -22,10 +59,105 @@
     border-color: #6a6e73;
 }
 
-/* CSP-konforme Klassen für die Befehlsausgabe und Textfarben */
+#send-btn {
+    background: #0066cc;
+    color: white;
+    border-color: #0056b3;
+}
+
+#send-btn:hover {
+    background: #0056b3;
+}
+
+#send-btn:disabled, #new-chat-btn:disabled {
+    background: #e4e4e4;
+    color: #8a8d90;
+    border-color: #d2d2d2;
+    cursor: not-allowed;
+}
+
+#model-select {
+    padding: 6px 12px;
+    border-radius: 3px;
+    border: 1px solid #8a8d90;
+    background: white;
+    font-size: 14px;
+}
+
+/* Chat-Verlauf */
+#chat-box {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Basis-Sprechblasen */
+.msg {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+/* Deine Nachrichten (Schickes Blau, rechtsbündig) */
+.user-msg {
+    background: #0066cc;
+    color: #ffffff;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+
+/* KI-Nachrichten (Weiß mit Rand, linksbündig) */
+.ai-msg {
+    background: #ffffff;
+    color: #151515;
+    align-self: flex-start;
+    border: 1px solid #d2d2d2;
+    border-bottom-left-radius: 2px;
+}
+
+/* Eingabe-Bereich ganz unten */
+.input-group {
+    display: flex;
+    gap: 10px;
+    padding: 15px 20px;
+    border-top: 1px solid #d2d2d2;
+    background: #fafafa;
+}
+
+#user-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #8a8d90;
+    border-radius: 3px;
+    font-size: 14px;
+    outline: none;
+}
+
+#user-input:focus {
+    border-color: #0066cc;
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
+}
+
+#user-input:disabled {
+    background: #f5f5f5;
+    cursor: not-allowed;
+}
+
+/* ========================================== */
+/* SPEZIAL-KLASSEN FÜR LINUX-BEFEHLE (CSP-konform) */
+/* ========================================== */
+
 .cmd-user-msg {
     background: #23272a !important;
     color: #ffffff !important;
+    border-bottom-right-radius: 8px !important;
 }
 
 .cmd-ai-msg {
@@ -34,14 +166,18 @@
     background: #1c1d22 !important;
     color: #39d353 !important;
     border-color: #30363d !important;
-    width: 90% !important;
+    width: 95% !important;
     max-width: 100% !important;
+    align-self: flex-start !important;
 }
 
+/* Text-Hilfsklassen */
 .text-danger {
     color: #ff6b6b !important;
 }
 
 .text-muted {
     color: #6a6e73 !important;
+    font-size: 13px;
+    display: block;
 }
