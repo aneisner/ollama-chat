@@ -4,6 +4,7 @@ const modelSelect = document.getElementById("model-select");
 const chatBox = document.getElementById("chat-box");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
+const newChatBtn = document.getElementById("new-chat-btn");
 
 // Modelle beim Start abrufen
 ollama.get("/api/tags")
@@ -61,3 +62,16 @@ userInput.addEventListener("keypress", function(event) {
         sendMessage();
     }
 });
+function resetChat() {
+    // Chatbox auf die standardmäßige Begrüßung zurücksetzen
+    chatBox.innerHTML = `<div class="msg ai-msg">Hallo Toni! Ich bin dein lokaler Ollama-Assistent im Cockpit. Wie kann ich helfen?</div>`;
+
+    // Eingabefelder leeren und wieder freigeben (falls sie während einer Generierung gesperrt waren)
+    userInput.value = "";
+    sendBtn.disabled = false;
+    userInput.disabled = false;
+    userInput.focus();
+}
+
+// Klick-Ereignis an den Button binden
+newChatBtn.addEventListener("click", resetChat);
