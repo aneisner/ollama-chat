@@ -17,15 +17,19 @@ try {
 let currentChatId = null;
 let currentMessages = [];
 
+// Der System-Prompt bereitet die KI darauf vor, Ergebnisse zu verarbeiten
 const SYSTEM_PROMPT = {
     role: 'system',
-    content: `Du bist ein Linux-System-Agent. Wenn der Nutzer dich bittet, einen Ordner zu prüfen, Dateien anzuzeigen oder eine Systemaufgabe zu erledigen, triggere den passenden Linux-Befehl.
-    REGELN:
-    1. Verwende NIEMALS Markdown-Codeblöcke (wie \`\`\`sh) für den auszuführenden Befehl!
-    2. Du MUSST den Befehl exakt in dieses Format packen: [[EXEC: dein_befehl]]
-    3. Antworte in normalem Text und hänge den EXEC-Tag einfach hinten an.`
+    content: `Du bist ein Linux-System-Agent auf Tonis Server. 
+    Wenn Toni dich bittet, eine Aufgabe zu erledigen, triggere den passenden Befehl im Format [[EXEC: dein_befehl]].
+    
+    WICHTIGE REGELN:
+    1. Verwende NIEMALS Markdown-Codeblöcke (wie \`\`\`sh) für den EXEC-Befehl!
+    2. Sobald ein Befehl ausgeführt wurde, erhältst du das Ergebnis als System-Nachricht im Chat-Verlauf.
+    3. Analysiere dieses Ergebnis und erkläre Toni in einer normalen Nachricht kurz, präzise und verständlich, was herausgekommen ist.`
 };
 
+// Modelle beim Start abrufen
 ollama.get("/api/tags")
     .then(data => {
         const response = JSON.parse(data);
@@ -102,33 +106,8 @@ function resetChat() {
     userInput.focus();
 }
 
-function sendMessage() {
-    const text = userInput.value.trim();
-    const selectedModel = modelSelect.value;
-    if (!text) return;
-
-    function uiAusgeben() {
-        sendBtn.disabled = false;
-        userInput.disabled = false;
-        userInput.focus();
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    if (text.startsWith('/')) {
-        const command = text.substring(1).trim();
-        if (!command) return;
-        chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
-        userInput.value = "";
-        executeSystemCommand(command, uiAusgeben);
-        return;
-    }
-
-    if (!selectedModel) return;
-
-    chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">${text}</div>`);
-    userInput.value = "";
-    chatBox.scrollTop = chatBox.scrollHeight;
-
+// Zentrale Funktion, um die KI anzutreiben und zu streamen
+function fetchAiResponse() {
     sendBtn.disabled = true;
     userInput.disabled = true;
 
@@ -140,9 +119,19 @@ function sendMessage() {
     let isFirstChunk = true;
     let buffer = "";
 
-    currentMessages.push({ role: 'user', content: text });
-    const ollamaPayload = [SYSTEM_PROMPT, ...currentMessages.filter(m => m && (m.role === 'user' || m.role === 'assistant'))];
+    // Payload für Ollama vorbereiten und Befehlshistorie "übersetzen"
+    const ollamaPayload = [SYSTEM_PROMPT];
+    currentMessages.forEach(m => {
+        if (m.role === 'user' || m.role === 'assistant') {
+            ollamaPayload.push(m);
+        } else if (m.role === 'command-user') {
+            ollamaPayload.push({ role: 'user', content: `[System-Meldung]: Führe Befehl aus: /${m.content}` });
+        } else if (m.role === 'command-assistant') {
+            ollamaPayload.push({ role: 'user', content: `[System-Ergebnis des ausgeführten Befehls]:\n${m.content}` });
+        }
+    });
 
+    const selectedModel = modelSelect.value;
     const request = ollama.request({
         method: "POST",
         path: "/api/chat",
@@ -171,8 +160,12 @@ function sendMessage() {
     request.done(function() {
         let finalAiText = aiMessageDiv.innerText;
         currentMessages.push({ role: 'assistant', content: finalAiText });
-        updateChatInList(text);
+        
+        // Titel für Sidebar festlegen (Erste User-Nachricht heranziehen)
+        const firstUserMsg = currentMessages.find(m => m.role === 'user');
+        updateChatInList(firstUserMsg ? firstUserMsg.content : "System-Agent");
 
+        // Prüfen, ob die KI (noch) einen Befehl ausführen möchte
         const execMatch = finalAiText.match(/\[\[EXEC:\s*(.*?)(?=\s*\]\])/);
         if (execMatch && execMatch[1]) {
             const detectedCommand = execMatch[1].trim();
@@ -190,7 +183,6 @@ function sendMessage() {
             chatBox.insertAdjacentHTML('beforeend', proposalHtml);
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            // HIER IST DIE KORREKTUR: Der Button bekommt das Feedback-Event übergeben
             const confirmBtn = document.getElementById(btnId);
             confirmBtn.addEventListener("click", function() {
                 confirmBtn.disabled = true;
@@ -198,18 +190,60 @@ function sendMessage() {
                 
                 executeSystemCommand(detectedCommand, function() {
                     confirmBtn.innerText = "✅ Befehl ausgeführt";
-                    uiAusgeben(); // Schaltet das normale Textfeld wieder frei
+                    // SCHLEIFE SCHLIESSEN: Wir rufen die KI erneut auf, um das Ergebnis zu analysieren!
+                    fetchAiResponse();
                 });
             });
         } else {
-            uiAusgeben();
+            // Keine weiteren Befehle? UI wieder freigeben
+            sendBtn.disabled = false;
+            userInput.disabled = false;
+            userInput.focus();
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
     });
 
     request.fail(function(err) {
-        aiMessageDiv.innerHTML += "<br><span class='text-danger'>[Fehler]</span>";
-        uiAusgeben();
+        aiMessageDiv.innerHTML += "<br><span class='text-danger'>[Fehler beim Abruf]</span>";
+        sendBtn.disabled = false;
+        userInput.disabled = false;
+        userInput.focus();
     });
+}
+
+function sendMessage() {
+    const text = userInput.value.trim();
+    const selectedModel = modelSelect.value;
+    if (!text) return;
+
+    // FALL A: Manueller Express-Befehl mit / (ohne KI-Auswertung)
+    if (text.startsWith('/')) {
+        const command = text.substring(1).trim();
+        if (!command) return;
+        chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
+        userInput.value = "";
+        
+        sendBtn.disabled = true;
+        userInput.disabled = true;
+        
+        executeSystemCommand(command, function() {
+            sendBtn.disabled = false;
+            userInput.disabled = false;
+            userInput.focus();
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+        return;
+    }
+
+    if (!selectedModel) return;
+
+    // FALL B: Normale KI-Agent-Anfrage
+    chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">${text}</div>`);
+    userInput.value = "";
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    currentMessages.push({ role: 'user', content: text });
+    fetchAiResponse();
 }
 
 function executeSystemCommand(command, callback) {
