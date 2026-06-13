@@ -17,19 +17,16 @@ try {
 let currentChatId = null;
 let currentMessages = [];
 
-// Der System-Prompt bereitet die KI darauf vor, Ergebnisse zu verarbeiten
 const SYSTEM_PROMPT = {
     role: 'system',
-    content: `Du bist ein Linux-System-Agent auf Tonis Server. 
-    Wenn Toni dich bittet, eine Aufgabe zu erledigen, triggere den passenden Befehl im Format [[EXEC: dein_befehl]].
+    content: `Du bist ein unbestechlicher, rein faktenbasierter Linux-System-Agent auf Tonis Server. 
+    Du darfst NIEMALS Vermutungen anstellen, Ergebnisse im Voraus erfinden oder Verzeichnisse simulieren! Du kennst die Daten erst, wenn du das Terminal-Ergebnis siehst.
     
-    WICHTIGE REGELN:
-    1. Verwende NIEMALS Markdown-Codeblöcke (wie \`\`\`sh) für den EXEC-Befehl!
-    2. Sobald ein Befehl ausgeführt wurde, erhältst du das Ergebnis als System-Nachricht im Chat-Verlauf.
-    3. Analysiere dieses Ergebnis und erkläre Toni in einer normalen Nachricht kurz, präzise und verständlich, was herausgekommen ist.`
+    DEIN PROTOKOLL:
+    1. In der ersten Antwort nennst du NUR kurz den Befehl im Format [[EXEC: dein_befehl]]. Keinen weiteren Text, keine erfundenen Tabellen!
+    2. Wenn du das echte Ergebnis als System-Nachricht erhältst, analysierst du stur NUR diese Daten und erklärst Toni sachlich, was dort steht.`
 };
 
-// Modelle beim Start abrufen
 ollama.get("/api/tags")
     .then(data => {
         const response = JSON.parse(data);
@@ -106,7 +103,6 @@ function resetChat() {
     userInput.focus();
 }
 
-// Zentrale Funktion, um die KI anzutreiben und zu streamen
 function fetchAiResponse() {
     sendBtn.disabled = true;
     userInput.disabled = true;
@@ -119,7 +115,6 @@ function fetchAiResponse() {
     let isFirstChunk = true;
     let buffer = "";
 
-    // Payload für Ollama vorbereiten und Befehlshistorie "übersetzen"
     const ollamaPayload = [SYSTEM_PROMPT];
     currentMessages.forEach(m => {
         if (m.role === 'user' || m.role === 'assistant') {
@@ -132,11 +127,20 @@ function fetchAiResponse() {
     });
 
     const selectedModel = modelSelect.value;
+    
+    // HIER WURDE DER MÄRCHEN-KILLER EINGEBAUT: options -> temperature: 0.0
     const request = ollama.request({
         method: "POST",
         path: "/api/chat",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: selectedModel, messages: ollamaPayload, stream: true })
+        body: JSON.stringify({ 
+            model: selectedModel, 
+            messages: ollamaPayload, 
+            stream: true,
+            options: {
+                temperature: 0.0 // Verhindert kreatives Erfinden komplett!
+            }
+        })
     });
 
     request.stream(function(data) {
@@ -161,11 +165,9 @@ function fetchAiResponse() {
         let finalAiText = aiMessageDiv.innerText;
         currentMessages.push({ role: 'assistant', content: finalAiText });
         
-        // Titel für Sidebar festlegen (Erste User-Nachricht heranziehen)
         const firstUserMsg = currentMessages.find(m => m.role === 'user');
         updateChatInList(firstUserMsg ? firstUserMsg.content : "System-Agent");
 
-        // Prüfen, ob die KI (noch) einen Befehl ausführen möchte
         const execMatch = finalAiText.match(/\[\[EXEC:\s*(.*?)(?=\s*\]\])/);
         if (execMatch && execMatch[1]) {
             const detectedCommand = execMatch[1].trim();
@@ -190,12 +192,10 @@ function fetchAiResponse() {
                 
                 executeSystemCommand(detectedCommand, function() {
                     confirmBtn.innerText = "✅ Befehl ausgeführt";
-                    // SCHLEIFE SCHLIESSEN: Wir rufen die KI erneut auf, um das Ergebnis zu analysieren!
                     fetchAiResponse();
                 });
             });
         } else {
-            // Keine weiteren Befehle? UI wieder freigeben
             sendBtn.disabled = false;
             userInput.disabled = false;
             userInput.focus();
@@ -216,7 +216,6 @@ function sendMessage() {
     const selectedModel = modelSelect.value;
     if (!text) return;
 
-    // FALL A: Manueller Express-Befehl mit / (ohne KI-Auswertung)
     if (text.startsWith('/')) {
         const command = text.substring(1).trim();
         if (!command) return;
@@ -237,7 +236,6 @@ function sendMessage() {
 
     if (!selectedModel) return;
 
-    // FALL B: Normale KI-Agent-Anfrage
     chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">${text}</div>`);
     userInput.value = "";
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -253,7 +251,7 @@ function executeSystemCommand(command, callback) {
 
     currentMessages.push({ role: 'command-user', content: command });
 
-    cockpit.spawn(["bash", "-c", command])
+    cockpit.spawn(["bash", "-c", command], { superuser: "require" })
         .done(output => {
             const resText = output || "[Befehl erfolgreich ohne Rückgabe ausgeführt]";
             document.getElementById(cmdId).innerText = resText;

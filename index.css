@@ -168,27 +168,36 @@ body {
 #send-btn:hover { background: #0056b3; }
 #send-btn:disabled { background: #e4e4e4; color: #8a8d90; border-color: #d2d2d2; cursor: not-allowed; }
 
-/* RECHTE FÜR BEFEHLE */
-.cmd-user-msg { background: #23272a !important; color: #ffffff !important; }
-.cmd-ai-msg {
-    font-family: monospace !important;
-    background: #1c1d22 !important;
-    color: #39d353 !important;
-    border-color: #30363d !important;
-    width: 95% !important;
-    max-width: 100% !important;
+/* BEFEHLSAUSGABEN */
+.cmd-user-msg {
+    background: #0066cc !important;
+    color: #ffffff !important;
+    border-bottom-right-radius: 2px !important;
 }
+
+.cmd-ai-msg {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace !important;
+    background: #ffffff !important;
+    color: #151515 !important;
+    border: 1px solid #d2d2d2 !important;
+    border-bottom-left-radius: 2px !important;
+    width: auto !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    white-space: pre-wrap !important;
+}
+
 .text-danger { color: #ff6b6b !important; }
 .text-muted { color: #6a6e73 !important; font-size: 13px; display: block; }
 
 /* ========================================== */
-/* NEW: SECURITY CONFIRMATION GATE STYLES     */
+/* UPDATED: SICHERHEITSBOX IN EDLEM HELLGRAU  */
 /* ========================================== */
 .cmd-proposal-box {
-    background: #fdf6e2 !important; /* Soft Amber background */
-    border: 1px solid #f0ab00 !important; /* Cockpit Warning Yellow/Amber */
-    border-left: 5px solid #f0ab00 !important;
-    color: #3d3d3d !important;
+    background: #f1f2f4 !important; /* Helles Hellgrau (PatternFly/Cockpit Style) */
+    border: 1px solid #d2d2d2 !important;
+    border-left: 5px solid #72767b !important; /* Dezent dunklerer grauer Akzentbalken */
+    color: #151515 !important;
     width: 90%;
     align-self: flex-start !important;
 }
@@ -200,7 +209,7 @@ body {
     border-radius: 3px;
     font-family: monospace;
     font-size: 14px;
-    color: #c9190b; /* Reddish command text */
+    color: #0066cc; /* Befehlstext in Cockpit-Blau */
     display: inline-block;
     margin-top: 5px;
 }
@@ -208,9 +217,9 @@ body {
 .exec-confirm-btn {
     margin-top: 10px;
     padding: 6px 14px;
-    background: #f0ab00; /* Warning Amber Button */
+    background: #e4e6e8; /* Passender hellgrauer Button */
     color: #151515;
-    border: 1px solid #b88300;
+    border: 1px solid #8a8d90;
     border-radius: 3px;
     font-weight: 700;
     cursor: pointer;
@@ -219,12 +228,5 @@ body {
 }
 
 .exec-confirm-btn:hover {
-    background: #d59600;
-}
-
-.exec-confirm-btn:disabled {
-    background: #e4e4e4;
-    color: #8a8d90;
-    border-color: #d2d2d2;
-    cursor: not-allowed;
+    background: #d2d2d2;
 }
