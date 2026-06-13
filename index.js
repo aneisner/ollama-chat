@@ -19,7 +19,7 @@ let currentMessages = [];
 
 const SYSTEM_PROMPT = {
     role: 'system',
-    content: `Du bist ein Linux-System-Agent. Wenn der Nutzer dich bittet, einen Ordner zu prüfen, Dateien anzuzeigen oder eine Systemaufgabe zu erledigen, triggere den echten Linux-Befehl.
+    content: `Du bist ein Linux-System-Agent. Wenn der Nutzer dich bittet, einen Ordner zu prüfen, Dateien anzuzeigen oder eine Systemaufgabe zu erledigen, triggere den passenden Linux-Befehl.
     REGELN:
     1. Verwende NIEMALS Markdown-Codeblöcke (wie \`\`\`sh) für den auszuführenden Befehl!
     2. Du MUSST den Befehl exakt in dieses Format packen: [[EXEC: dein_befehl]]
@@ -73,10 +73,15 @@ function loadChat(id) {
     chatBox.innerHTML = "";
     currentMessages.forEach(m => {
         if (!m || !m.role) return;
-        if (m.role === 'user') chatBox.innerHTML += `<div class="msg user-msg">${m.content || ''}</div>`;
-        else if (m.role === 'assistant') chatBox.innerHTML += `<div class="msg ai-msg">${m.content || ''}</div>`;
-        else if (m.role === 'command-user') chatBox.innerHTML += `<div class="msg user-msg cmd-user-msg">💻 Agent-Befehl: ${m.content || ''}</div>`;
-        else if (m.role === 'command-assistant') chatBox.innerHTML += `<div class="msg ai-msg cmd-ai-msg">${m.content || ''}</div>`;
+        if (m.role === 'user') {
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">${m.content || ''}</div>`);
+        } else if (m.role === 'assistant') {
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg">${m.content || ''}</div>`);
+        } else if (m.role === 'command-user') {
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Agent-Befehl: ${m.content || ''}</div>`);
+        } else if (m.role === 'command-assistant') {
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg cmd-ai-msg">${m.content || ''}</div>`);
+        }
     });
     chatBox.scrollTop = chatBox.scrollHeight;
 }
@@ -112,7 +117,7 @@ function sendMessage() {
     if (text.startsWith('/')) {
         const command = text.substring(1).trim();
         if (!command) return;
-        chatBox.innerHTML += `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`;
+        chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
         userInput.value = "";
         executeSystemCommand(command, uiAusgeben);
         return;
@@ -120,7 +125,7 @@ function sendMessage() {
 
     if (!selectedModel) return;
 
-    chatBox.innerHTML += `<div class="msg user-msg">${text}</div>`;
+    chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">${text}</div>`);
     userInput.value = "";
     chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -128,7 +133,7 @@ function sendMessage() {
     userInput.disabled = true;
 
     const aiMessageDivId = "ai-" + Date.now();
-    chatBox.innerHTML += `<div class="msg ai-msg" id="${aiMessageDivId}"><i>Überlege...</i></div>`;
+    chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg" id="${aiMessageDivId}"><i>Überlege...</i></div>`);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     const aiMessageDiv = document.getElementById(aiMessageDivId);
@@ -173,10 +178,29 @@ function sendMessage() {
             const detectedCommand = execMatch[1].trim();
             aiMessageDiv.innerText = finalAiText.replace(/\[\[EXEC:.*?\]\]/g, "").trim();
             
-            setTimeout(() => {
-                chatBox.innerHTML += `<div class="msg user-msg cmd-user-msg">🤖 KI-Agent löst aus: <code>${detectedCommand}</code></div>`;
-                executeSystemCommand(detectedCommand, uiAusgeben);
-            }, 600);
+            const btnId = "auth-btn-" + Date.now();
+            const proposalHtml = `
+                <div class="msg ai-msg cmd-proposal-box">
+                    ⚠️ <b>Sicherheits-Check:</b> KI möchte eine Aktion ausführen:
+                    <br><code>${detectedCommand}</code>
+                    <br><br>
+                    <button id="${btnId}" class="exec-confirm-btn">🛡️ Befehl bestätigen & ausführen</button>
+                </div>`;
+            
+            chatBox.insertAdjacentHTML('beforeend', proposalHtml);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // HIER IST DIE KORREKTUR: Der Button bekommt das Feedback-Event übergeben
+            const confirmBtn = document.getElementById(btnId);
+            confirmBtn.addEventListener("click", function() {
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = "⏳ Ausführung läuft...";
+                
+                executeSystemCommand(detectedCommand, function() {
+                    confirmBtn.innerText = "✅ Befehl ausgeführt";
+                    uiAusgeben(); // Schaltet das normale Textfeld wieder frei
+                });
+            });
         } else {
             uiAusgeben();
         }
@@ -190,7 +214,7 @@ function sendMessage() {
 
 function executeSystemCommand(command, callback) {
     const cmdId = "cmd-" + Date.now();
-    chatBox.innerHTML += `<div class="msg ai-msg cmd-ai-msg" id="${cmdId}"><i>Führe Befehl aus...</i></div>`;
+    chatBox.insertAdjacentHTML('beforeend', `<div class="msg ai-msg cmd-ai-msg" id="${cmdId}"><i>Führe Befehl aus...</i></div>`);
     chatBox.scrollTop = chatBox.scrollHeight;
 
     currentMessages.push({ role: 'command-user', content: command });
