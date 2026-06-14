@@ -1,3 +1,5 @@
+// Erstellt von Toni & KI | Modul: Ollama Cockpit Chat-Agent | Beschreibung: Kern-Logik für Web-UI, dynamischer User (Sicher), /exec Shortcut und Loop-Fix
+
 const ollama = cockpit.http(11434);
 const modelSelect = document.getElementById("model-select");
 const chatBox = document.getElementById("chat-box");
@@ -20,17 +22,40 @@ let currentMessages = [];
 let currentActiveProcess = null;  
 let wasIntentionalStop = false;  
 
-// UPDATED: Flexibler Prompt mit "Ausfahrt" für normalen Chat
-const SYSTEM_PROMPT = {
-    role: 'system',
-    content: `Du bist ein unbestechlicher, rein faktenbasierter Linux-System-Agent auf Tonis Server. 
-    Du darfst NIEMALS Vermutungen anstellen oder Ergebnisse im Voraus erfinden!
-    
-    DEIN PROTOKOLL:
-    1. Wenn Toni eine Aufgabe stellt, die eine Aktion auf dem Server erfordert (Dateien lesen, ändern, System prüfen): Nenne NUR kurz den Befehl im Format [[EXEC: dein_befehl]]. Keinen weiteren Text!
-    2. Wenn Toni nur chattet, hallo sagt, einen Test macht oder keine Server-Aktion nötig ist: Antworte ihm ganz normal, freundlich und extrem kurz als Text. Verwende dann NIEMALS den [[EXEC]]-Tag!
-    3. Wenn du ein echtes Terminal-Ergebnis erhältst, analysierst du stur NUR diese Daten und erklärst Toni sachlich, was dort steht.`
-};
+// Bulletproof: Dynamischer Benutzer mit Try-Catch
+let currentUser = "Admin";
+try {
+    if (typeof cockpit.user === 'function') {
+        cockpit.user().done(function(user) {
+            if (user && user.name) {
+                currentUser = user.name;
+                const welcomeMsg = document.querySelector('.welcome-user-name');
+                if (welcomeMsg) welcomeMsg.innerText = currentUser;
+            }
+        }).fail(function() {
+            console.warn("Konnte Cockpit-User nicht laden. Nutze Fallback.");
+        });
+    }
+} catch(e) {
+    console.warn("Cockpit User API nicht verfügbar.");
+}
+
+// Dynamischer und strikter Prompt MIT Analyse-Regel gegen Endlosschleifen
+function getSystemPrompt() {
+    return {
+        role: 'system',
+        content: `Du bist ein technischer Linux-System-Agent auf dem Server von ${currentUser}. Du bist KEIN Chatbot, du bist eine Maschine!
+        
+        STRIKTE REGELN:
+        1. Wenn ${currentUser} eine Aktion, Datei oder Systeminfo anfragt, antwortest du AUSSCHLIESSLICH mit dem Befehl.
+        2. Das Format für Befehle muss exakt so aussehen: [[EXEC: dein_linux_befehl]]
+        3. BEISPIEL:
+           User: "zeige mir den inhalt vom etc verzeichnis"
+           Du: [[EXEC: ls -la /etc]]
+        4. INTERPRETATION: Wenn die Nachricht mit "[System-Ergebnis des ausgeführten Befehls]" beginnt, ist der Befehl BEREITS ERFOLGREICH AUSGEFÜHRT. Du darfst dann NIEMALS einen neuen [[EXEC]]-Tag generieren! Analysiere stattdessen die Daten sachlich und erkläre sie als normalen Text.
+        5. Nur wenn ${currentUser} chattet (ohne Systembezug), antwortest du normal und kurz.`
+    };
+}
 
 function toggleControls(isActive) {
     if (isActive) {
@@ -45,22 +70,29 @@ function toggleControls(isActive) {
     }
 }
 
+// Modelle laden
 ollama.get("/api/tags")
-    .then(data => {
-        const response = JSON.parse(data);
-        modelSelect.innerHTML = "";
-        if (response.models && response.models.length > 0) {
-            response.models.forEach(m => {
-                const opt = document.createElement("option");
-                opt.value = m.name;
-                opt.innerText = m.name;
-                modelSelect.appendChild(opt);
-            });
-        } else {
-            modelSelect.innerHTML = "<option>Keine Modelle gefunden</option>";
+    .done(function(data) {
+        try {
+            const response = (typeof data === 'string') ? JSON.parse(data) : data;
+            modelSelect.innerHTML = "";
+            if (response.models && response.models.length > 0) {
+                response.models.forEach(m => {
+                    const opt = document.createElement("option");
+                    opt.value = m.name;
+                    opt.innerText = m.name;
+                    modelSelect.appendChild(opt);
+                });
+            } else {
+                modelSelect.innerHTML = "<option>Keine Modelle gefunden</option>";
+            }
+        } catch(e) {
+            console.error("JSON Parse Error beim Laden der Modelle:", e);
+            modelSelect.innerHTML = "<option>Fehler beim Parsen</option>";
         }
     })
-    .catch(err => { 
+    .fail(function(err) { 
+        console.error("Ollama API Fehler:", err);
         modelSelect.innerHTML = "<option>Fehler: Ollama blockiert</option>"; 
     });
 
@@ -111,9 +143,9 @@ function resetChat() {
     renderSidebar();
     chatBox.innerHTML = `
         <div class="msg ai-msg">
-            Hallo Toni! Ich bin dein KI-System-Agent. Du kannst mich jetzt bitten, Aufgaben auf dem Server zu erledigen!
+            Hallo <b class="welcome-user-name">${currentUser}</b>! Ich bin dein KI-System-Agent. Du kannst mich jetzt bitten, Aufgaben auf dem Server zu erledigen!
             <br><br>
-            <small class="text-muted">Probiere mal: <i>"Zeig mir den Inhalt von /home/toni/development/ollama-chat/"</i></small>
+            <small class="text-muted">Probiere mal: <i>"/exec zeig mir den inhalt von /etc/os-release"</i></small>
         </div>`;
     userInput.value = "";
     toggleControls(false);
@@ -131,7 +163,7 @@ function fetchAiResponse() {
     let isFirstChunk = true;
     let buffer = "";
 
-    const ollamaPayload = [SYSTEM_PROMPT];
+    const ollamaPayload = [getSystemPrompt()];
     currentMessages.forEach(m => {
         if (m.role === 'user' || m.role === 'assistant') {
             ollamaPayload.push(m);
@@ -152,7 +184,10 @@ function fetchAiResponse() {
             model: selectedModel, 
             messages: ollamaPayload, 
             stream: true,
-            options: { temperature: 0.0 }
+            options: { 
+                temperature: 0.0,
+                num_ctx: 1500
+            }
         })
     });
 
@@ -184,13 +219,11 @@ function fetchAiResponse() {
         const firstUserMsg = currentMessages.find(m => m.role === 'user');
         updateChatInList(firstUserMsg ? firstUserMsg.content : "System-Agent");
 
-        // Prüft, ob ÜBERHAUPT ein EXEC-Tag vorhanden ist
         const execMatch = finalAiText.match(/\[\[EXEC:\s*(.*?)(?=\s*\]\])/);
         if (execMatch && execMatch[1]) {
             const detectedCommand = execMatch[1].trim();
             aiMessageDiv.innerText = finalAiText.replace(/\[\[EXEC:.*?\]\]/g, "").trim();
             
-            // Falls die KI NUR den EXEC-Tag geschickt hat, füllen wir die Blase kosmetisch
             if (aiMessageDiv.innerText.trim() === "") {
                 aiMessageDiv.innerText = "Ich bereite die Ausführung vor:";
             }
@@ -219,7 +252,7 @@ function fetchAiResponse() {
                     const analysisBtnId = "analysis-btn-" + Date.now();
                     const analysisHtml = `
                         <div class="msg ai-msg cmd-proposal-box" style="border-left: 5px solid #0066cc !important; background: #f0f6ff !important;">
-                            💡 <b>Ergebnis empfangen.</b> Möchtest du, dass ich die Daten für dich interpretiere?
+                            💡 <b>Ergebnis empfangen.</b> Möchtest du, dass ich die Daten für dich interpretieren soll?
                             <br><br>
                             <button id="${analysisBtnId}" class="exec-confirm-btn" style="background: #0066cc; color: white; border-color: #0056b3;">📊 Ergebnis interpretieren</button>
                         </div>`;
@@ -236,7 +269,6 @@ function fetchAiResponse() {
                 });
             });
         } else {
-            // KEIN EXEC-Tag vorhanden -> Normaler Chat-Modus, Eingabe sofort wieder freigeben!
             toggleControls(false);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -256,16 +288,30 @@ function sendMessage() {
     if (!text) return;
 
     if (text.startsWith('/')) {
-        const command = text.substring(1).trim();
-        if (!command) return;
-        chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
-        userInput.value = "";
-        toggleControls(true);
-        executeSystemCommand(command, function() {
-            toggleControls(false);
+        if (text.toLowerCase().startsWith('/exec ')) {
+            const task = text.substring(6).trim();
+            if (!task) return;
+            
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg">🤖 <b>KI-Shortcut:</b> ${task}</div>`);
+            userInput.value = "";
             chatBox.scrollTop = chatBox.scrollHeight;
-        });
-        return;
+            
+            const enforcedPrompt = `SYSTEM-OVERRIDE: Übersetze die folgende Aufgabe zwingend in einen Linux-Befehl. Antworte AUSSCHLIESSLICH im Format [[EXEC: <befehl>]]. Kein Vorwort, keine Erklärungen!\nAufgabe: ${task}`;
+            currentMessages.push({ role: 'user', content: enforcedPrompt });
+            fetchAiResponse();
+            return;
+        } else {
+            const command = text.substring(1).trim();
+            if (!command) return;
+            chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
+            userInput.value = "";
+            toggleControls(true);
+            executeSystemCommand(command, function() {
+                toggleControls(false);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+            return;
+        }
     }
 
     if (!selectedModel) return;

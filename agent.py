@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-# Erstellt von aneisner | Modul: Ollama CLI Agent | Beschreibung: Terminal-Client mit Root-Befehlsausführung und Modellauswahl
+# Erstellt von Toni & KI | Modul: Ollama CLI Agent | Beschreibung: Terminal-Client mit Root-Befehlen, dynamischem User, Modellauswahl und /exec Shortcut
 
 import requests
 import json
 import subprocess
 import sys
 import re
+import os
+import getpass
+
+# Holt den echten Benutzernamen, auch wenn das Skript mit "sudo" ausgeführt wird
+CURRENT_USER = os.environ.get("SUDO_USER", os.environ.get("USER", getpass.getuser()))
 
 # Terminal-Farben für die schicke Ausgabe
 C_BLUE = '\033[94m'
@@ -15,16 +20,21 @@ C_YELLOW = '\033[93m'
 C_END = '\033[0m'
 
 OLLAMA_API_BASE = "http://127.0.0.1:11434/api"
-DEFAULT_MODEL = "qwen2.5-coder:3b" # Startmodell
+DEFAULT_MODEL = "qwen2.5-coder:3b"
 
+# Militärischer Prompt MIT Regel für die Ergebnis-Analyse
 SYSTEM_PROMPT = {
     "role": "system",
-    "content": """Du bist ein unbestechlicher, rein faktenbasierter Linux-System-Agent auf Tonis Server.
+    "content": f"""Du bist ein technischer Linux-System-Agent auf dem Server von {CURRENT_USER}. Du bist KEIN Chatbot, du bist eine Maschine!
     
-    DEIN PROTOKOLL:
-    1. Wenn Toni eine Aufgabe stellt, die eine Aktion auf dem Server erfordert: Nenne NUR kurz den Befehl im Format [[EXEC: dein_befehl]]. Keinen weiteren Text!
-    2. Wenn Toni nur chattet: Antworte ihm ganz normal und kurz als Text. Verwende dann NIEMALS den [[EXEC]]-Tag!
-    3. Wenn du ein echtes Terminal-Ergebnis erhältst, erklärst du Toni sachlich, was dort steht."""
+    STRIKTE REGELN:
+    1. Wenn {CURRENT_USER} eine Aktion, Datei oder Systeminfo anfragt, antwortest du AUSSCHLIESSLICH mit dem Befehl.
+    2. Das Format für Befehle muss exakt so aussehen: [[EXEC: dein_linux_befehl]]
+    3. BEISPIEL:
+       User: "zeige mir den inhalt vom etc verzeichnis"
+       Du: [[EXEC: ls -la /etc]]
+    4. INTERPRETATION: Wenn deine Eingabe mit "[System-Ergebnis des ausgeführten Befehls]" beginnt, ist der Befehl BEREITS ERFOLGREICH AUSGEFÜHRT. Du darfst dann NIEMALS einen neuen [[EXEC]]-Tag generieren! Analysiere stattdessen die Daten sachlich und erkläre sie als normalen Text.
+    5. Nur wenn {CURRENT_USER} chattet (ohne Systembezug), antwortest du normal und kurz."""
 }
 
 messages = [SYSTEM_PROMPT]
@@ -72,7 +82,10 @@ def ask_ollama(messages_list, model_name):
         "model": model_name,
         "messages": messages_list,
         "stream": True,
-        "options": {"temperature": 0.0, "num_ctx": 1500}
+        "options": {
+            "temperature": 0.0, 
+            "num_ctx": 1500 # CPU Entlastung
+        }
     }
     
     print(f"\n{C_BLUE}Agent überlegt...{C_END}")
@@ -99,24 +112,29 @@ def ask_ollama(messages_list, model_name):
 def main():
     current_model = DEFAULT_MODEL
     print(f"{C_GREEN}=== Ollama Terminal Agent gestartet ==={C_END}")
-    print(f"Aktuelles Modell: {C_BLUE}{current_model}{C_END}")
-    print("Tippe 'exit' zum Beenden oder '/modelle' um das Modell zu wechseln.\n")
+    print(f"Willkommen, {CURRENT_USER}! Aktuelles Modell: {C_BLUE}{current_model}{C_END}")
+    print("Tipps: 'exit' = Beenden | '/modelle' = Modell wechseln | '/exec <aufgabe>' = Befehl erzwingen\n")
     
     while True:
         try:
-            user_input = input(f"{C_YELLOW}Toni:~${C_END} ").strip()
+            user_input = input(f"{C_YELLOW}{CURRENT_USER}:~${C_END} ").strip()
             if not user_input:
                 continue
                 
             if user_input.lower() in ['exit', 'quit']:
                 break
                 
-            # NEU: Befehl zum Wechseln des Modells abfangen
-            if user_input.lower() == '/modelle' or user_input.lower() == '/model':
+            if user_input.lower() in ['/modelle', '/model']:
                 current_model = list_and_select_model(current_model)
                 continue
             
-            messages.append({"role": "user", "content": user_input})
+            # NEU: Der /exec Shortcut-Filter
+            if user_input.lower().startswith('/exec '):
+                task = user_input[6:].strip()
+                enforced_prompt = f"SYSTEM-OVERRIDE: Übersetze die folgende Aufgabe zwingend in einen Linux-Befehl. Antworte AUSSCHLIESSLICH im Format [[EXEC: <befehl>]]. Kein Vorwort, keine Erklärungen!\nAufgabe: {task}"
+                messages.append({"role": "user", "content": enforced_prompt})
+            else:
+                messages.append({"role": "user", "content": user_input})
             
             ai_text = ask_ollama(messages, current_model)
             messages.append({"role": "assistant", "content": ai_text})
@@ -151,7 +169,6 @@ def main():
 
         except KeyboardInterrupt:
             print(f"\n{C_RED}🛑 Vorgang durch Benutzer abgebrochen (Strg+C).{C_END}")
-            # Verhindert, dass das gesamte Skript bei Strg+C abstürzt
             continue
 
 if __name__ == "__main__":
