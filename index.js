@@ -3,7 +3,7 @@ const modelSelect = document.getElementById("model-select");
 const chatBox = document.getElementById("chat-box");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
-const stopBtn = document.getElementById("stop-btn"); // Neu
+const stopBtn = document.getElementById("stop-btn");
 const newChatBtn = document.getElementById("new-chat-btn");
 const historyList = document.getElementById("history-list");
 
@@ -17,20 +17,21 @@ try {
 
 let currentChatId = null;
 let currentMessages = [];
-let currentActiveProcess = null;  // Hält den aktiven Stream oder System-Prozess
-let wasIntentionalStop = false;  // Verhindert hässliche rote Error-Blöcke bei manuellem Abbruch
+let currentActiveProcess = null;  
+let wasIntentionalStop = false;  
 
+// UPDATED: Flexibler Prompt mit "Ausfahrt" für normalen Chat
 const SYSTEM_PROMPT = {
     role: 'system',
     content: `Du bist ein unbestechlicher, rein faktenbasierter Linux-System-Agent auf Tonis Server. 
-    Du darfst NIEMALS Vermutungen anstellen, Ergebnisse im Voraus erfinden oder Verzeichnisse simulieren! Du kennst die Daten erst, wenn du das Terminal-Ergebnis siehst.
+    Du darfst NIEMALS Vermutungen anstellen oder Ergebnisse im Voraus erfinden!
     
     DEIN PROTOKOLL:
-    1. In der ersten Antwort nennst du NUR kurz den Befehl im Format [[EXEC: dein_befehl]]. Keinen weiteren Text, keine erfundenen Tabellen!
-    2. Wenn du das echte Ergebnis als System-Nachricht erhältst, analysierst du stur NUR diese Daten und erklärst Toni sachlich, was dort steht.`
+    1. Wenn Toni eine Aufgabe stellt, die eine Aktion auf dem Server erfordert (Dateien lesen, ändern, System prüfen): Nenne NUR kurz den Befehl im Format [[EXEC: dein_befehl]]. Keinen weiteren Text!
+    2. Wenn Toni nur chattet, hallo sagt, einen Test macht oder keine Server-Aktion nötig ist: Antworte ihm ganz normal, freundlich und extrem kurz als Text. Verwende dann NIEMALS den [[EXEC]]-Tag!
+    3. Wenn du ein echtes Terminal-Ergebnis erhältst, analysierst du stur NUR diese Daten und erklärst Toni sachlich, was dort steht.`
 };
 
-// Hilfsfunktion: Steuert das nahtlose Swappen von Senden- und Stop-Button
 function toggleControls(isActive) {
     if (isActive) {
         sendBtn.style.display = "none";
@@ -44,7 +45,6 @@ function toggleControls(isActive) {
     }
 }
 
-// Modelle beim Start abrufen
 ollama.get("/api/tags")
     .then(data => {
         const response = JSON.parse(data);
@@ -156,7 +156,7 @@ function fetchAiResponse() {
         })
     });
 
-    currentActiveProcess = request; // Für den Abbruch-Handle registrieren
+    currentActiveProcess = request; 
 
     request.stream(function(data) {
         buffer += data;
@@ -184,11 +184,17 @@ function fetchAiResponse() {
         const firstUserMsg = currentMessages.find(m => m.role === 'user');
         updateChatInList(firstUserMsg ? firstUserMsg.content : "System-Agent");
 
+        // Prüft, ob ÜBERHAUPT ein EXEC-Tag vorhanden ist
         const execMatch = finalAiText.match(/\[\[EXEC:\s*(.*?)(?=\s*\]\])/);
         if (execMatch && execMatch[1]) {
             const detectedCommand = execMatch[1].trim();
             aiMessageDiv.innerText = finalAiText.replace(/\[\[EXEC:.*?\]\]/g, "").trim();
             
+            // Falls die KI NUR den EXEC-Tag geschickt hat, füllen wir die Blase kosmetisch
+            if (aiMessageDiv.innerText.trim() === "") {
+                aiMessageDiv.innerText = "Ich bereite die Ausführung vor:";
+            }
+
             const btnId = "auth-btn-" + Date.now();
             const proposalHtml = `
                 <div class="msg ai-msg cmd-proposal-box">
@@ -200,8 +206,6 @@ function fetchAiResponse() {
             
             chatBox.insertAdjacentHTML('beforeend', proposalHtml);
             chatBox.scrollTop = chatBox.scrollHeight;
-
-            // Da ein EXEC-Befehl auf Freigabe wartet, geben wir die Buttons wieder frei
             toggleControls(false);
 
             const confirmBtn = document.getElementById(btnId);
@@ -222,7 +226,6 @@ function fetchAiResponse() {
                     
                     chatBox.insertAdjacentHTML('beforeend', analysisHtml);
                     chatBox.scrollTop = chatBox.scrollHeight;
-                    
                     toggleControls(false);
                     
                     document.getElementById(analysisBtnId).addEventListener("click", function() {
@@ -233,6 +236,7 @@ function fetchAiResponse() {
                 });
             });
         } else {
+            // KEIN EXEC-Tag vorhanden -> Normaler Chat-Modus, Eingabe sofort wieder freigeben!
             toggleControls(false);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -240,7 +244,7 @@ function fetchAiResponse() {
 
     request.fail(function(err) {
         currentActiveProcess = null;
-        if (wasIntentionalStop) return; // Unterdrückt Fehlermeldung bei manuellem Stop
+        if (wasIntentionalStop) return; 
         aiMessageDiv.innerHTML += "<br><span class='text-danger'>[Fehler beim Abruf]</span>";
         toggleControls(false);
     });
@@ -256,9 +260,7 @@ function sendMessage() {
         if (!command) return;
         chatBox.insertAdjacentHTML('beforeend', `<div class="msg user-msg cmd-user-msg">💻 Manueller Befehl: ${command}</div>`);
         userInput.value = "";
-        
         toggleControls(true);
-        
         executeSystemCommand(command, function() {
             toggleControls(false);
             chatBox.scrollTop = chatBox.scrollHeight;
@@ -287,7 +289,7 @@ function executeSystemCommand(command, callback) {
     currentMessages.push({ role: 'command-user', content: command });
 
     const proc = cockpit.spawn(["bash", "-c", command], { superuser: "require" });
-    currentActiveProcess = proc; // Für den Abbruch-Handle registrieren
+    currentActiveProcess = proc; 
 
     proc.done(output => {
         currentActiveProcess = null;
@@ -296,10 +298,10 @@ function executeSystemCommand(command, callback) {
         currentMessages.push({ role: 'command-assistant', content: resText });
         saveToLocalStorage();
         callback();
-    })
+    });
     proc.fail(error => {
         currentActiveProcess = null;
-        if (wasIntentionalStop) return; // Unterdrückt Fehlermeldung bei manuellem Stop
+        if (wasIntentionalStop) return; 
         const errText = `Fehler (Code ${error.exit_code || error.status}):\n${error.message || 'Befehl fehlgeschlagen'}`;
         document.getElementById(cmdId).innerHTML = `<span class="text-danger">${errText}</span>`;
         currentMessages.push({ role: 'command-assistant', content: errText });
@@ -308,15 +310,13 @@ function executeSystemCommand(command, callback) {
     });
 }
 
-// DER AKTION-TRIGGER FÜR DEN STOP-BUTTON
 stopBtn.addEventListener("click", function() {
     if (currentActiveProcess) {
         wasIntentionalStop = true;
-        currentActiveProcess.close(); // Killt den HTTP-Stream oder den Linux-Bash-Prozess augenblicklich!
+        currentActiveProcess.close(); 
         currentActiveProcess = null;
     }
     
-    // Sucht das letzte wartende Element im Chat und markiert es als abgebrochen
     const activeThinking = chatBox.querySelector('.ai-msg:last-child');
     if (activeThinking && (activeThinking.innerText.includes("Überlege...") || activeThinking.innerText.includes("Führe Befehl aus..."))) {
         activeThinking.innerHTML = `<span class="text-danger">🛑 Vorgang vom Benutzer abgebrochen.</span>`;
@@ -325,7 +325,7 @@ stopBtn.addEventListener("click", function() {
     }
     
     chatBox.scrollTop = chatBox.scrollHeight;
-    toggleControls(false); // Macht die Eingabe und den Senden-Button sofort wieder bereit!
+    toggleControls(false); 
 });
 
 function updateChatInList(firstText) {
