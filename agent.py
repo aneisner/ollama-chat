@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Erstellt von Toni | Modul: Ollama CLI Agent | Beschreibung: Terminal-Client mit Root-Befehlsausführung und Modellauswahl
+# Erstellt von aneisner | Modul: Ollama CLI Agent | Beschreibung: Terminal-Client mit Root-Befehlsausführung und Modellauswahl
 
 import requests
 import json
